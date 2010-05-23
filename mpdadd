@@ -5,46 +5,53 @@ require 'fileutils'
 require 'getoptlong'
 
 # comment this line out if you use the gem version of 'librmpd'
-#require 'rubygems' 
+#require 'rubygems'
 require 'librmpd' # avaible in gems and in AUR in Archlinux
 
-class Config
-	# In the futur a configuration should be processed.
+################# Change this to your settings ####################
+class Config    # In the futur a configuration should be processed.
+	# The top directory specified in /etc/mpd.conf
 	Music_dir = '~/music'
+	# The basename of the directory where the symbolic are stored.
+	# Should be writeable by the user, who start this script.
 	Links_dirname = 'link'
-	MPD_ip = 'localhost'
+	# Domain name or IP adress of the server. If you add a remote server,
+	# the linked files must be readable by the server.
+	MPD_host = '127.0.0.1'
+	# Port where MPD is listen to. Default: 6600
 	MPD_port = 6600
+	# Optional, This field will be ignored, if set to nil
 	Password = nil # is passed as plaintext
 end
+#################################################################
 
 module Info
 	Name = File.basename $0
 	Description = 'Add all songs on your harddrive to your local MPD'
 	Author = 'Joerg T. aka Mic92'
 	Version = 0.1
-	Homepage = 
+	Homepage = 'http://github.com/Mic92/mpdadd'
 end
 
 class Mpdadd
 	def parse_arguments
 		switches = GetoptLong.new(
 			[ '--help', '-h', GetoptLong::NO_ARGUMENT ],
-			[ '--play', '-p', GetoptLong::NO_ARGUMENT ], 
+			[ '--play', '-p', GetoptLong::NO_ARGUMENT ],
 			[ '--verbose', '-v', GetoptLong::NO_ARGUMENT ],
-			[ '--version', GetoptLong::NO_ARGUMENT ] 
-		)
+			[ '--version', GetoptLong::NO_ARGUMENT ])
 
 		# Default options
 		options = {}
-		options[:help] = false 
+		options[:help] = false
 		options[:play] = false
 		options[:verbose] = false
 		options[:version] = false
 		options[:files] = []
 
 		switches.each do |opt|
-			case opt 
-			when '--help' 
+			case opt
+			when '--help'
 				options[:help] = true
 			when '--play'
 				options[:play] = true
@@ -56,7 +63,7 @@ class Mpdadd
 		end
 
 		# The rest args are files/directorys hopefully.
-		options[:files] = ARGV 
+		options[:files] = ARGV
 		return options
 	end
 
@@ -68,12 +75,12 @@ class Mpdadd
 		elsif options[:version]
 			show_version
 			exit 0
-		elsif !options[:files].empty? # test all files, wheter they exist.
+		elsif !options[:files].empty? # Filter all non-existent files.
 			validate_files = []
 
-		  options[:files].each do |file|
+			options[:files].each do |file|
 				if !File.exist? file
-					puts "File #{file} does not exist"
+					puts "File #{file} does not exist!"
 					next
 				end
 				validate_files << file
@@ -89,17 +96,25 @@ class Mpdadd
 
 	def add_files(options, mpc)
 		options[:files].each do |file|
-			path = File.expand_path file 
+			path = File.expand_path file
 			relativ_path = ""
 
 			puts 'Enqueing: '+File.basename(file) if options[:verbose]
-			# if the given path is within music dir just add it 
+			# if the given path is within music dir just add it
 			if path.index( MPC::Full_music_path ) == 0
+				puts 'File is already in music directory!' if options[:verbose]
 				relativ_path = path[MPC::Full_music_path.length+1, path.length]
 			else  # else link and force MPD update
-				puts 'Force link!' if options[:verbose]
 				unique = generate_unique path # replace directory delimiter with !
-				FileUtils.ln_sf path, File.join(MPC::Full_links_path, unique)
+				link_path = File.join(MPC::Full_links_path, unique)
+
+				if !File.exist?(link_path) or (File.readlink link_path) == file
+					puts 'Force simbolic link!' if options[:verbose]
+					FileUtils.ln_sf path, link_path
+				elsif options[:verbose]
+					puts 'Link already exists!'
+				end
+
 				relativ_path = File.join(Config::Links_dirname, unique)
 			end
 
@@ -134,15 +149,17 @@ class Mpdadd
   --play,     -p  play the first file added
   --help,     -h  show this help
   --verbose   -v  verbose logging
-  --recursive -r  include subdirs 
-  --version       show version number 
-	EOF
+  --recursive -r  include subdirs
+  --version       show version number
+		EOF
 	end
 
 	def show_version
-		puts "Version: #{Info::Version}"
-		puts "Author: #{Info::Author}"
-		puts "Source: #{Info::Homepage}"
+		puts <<-EOF
+Version: #{Info::Version}
+Author: #{Info::Author}
+Source: #{Info::Homepage}
+EOF
 	end
 
 	def initialize
@@ -159,7 +176,7 @@ class Mpdadd
 		end
 
 		puts 'Finished successful!' if options[:verbose]
-    exit 0
+		exit 0
 	end
 
 	private :parse_arguments, :validate_options, :add_files, :generate_unique,  :show_usage, :show_version
@@ -169,21 +186,24 @@ class MPC < MPD
 	Full_music_path = File.expand_path(Config::Music_dir)
 	Full_links_path = File.join(Full_music_path, Config::Links_dirname)
 
-	def validate_config
+	def config_valid?
 		if !File.exist? Full_music_path
 			warn "Given music directory '#{Config::Music_dir}' does not exist"
 			return false
-		elsif !File.exist? Full_links_path 
+		elsif !File.exist? Full_links_path
 			print "Given link directory '#{Config::Links_dirname}' doesn't exists, create it? y or n?";
 			yes = (STDIN.gets =~ /^y.*/i)
 			if yes then
 				begin
-					FileUtils.mkpath Full_links_path 
+					FileUtils.mkpath Full_links_path
 				rescue
 					warn "Can't create #$!."
-					return false 
+					return false
 				end
 			end
+		elsif !File.writable? Full_links_path
+			warn "Can't create links: '#{Full_links_path}' is not writable"
+			return false
 		end
 		return true
 	end
@@ -192,21 +212,21 @@ class MPC < MPD
 		begin
 			connect
 		rescue
-			warn "Can't connect to MPD: #{Config::MPD_ip}:#{Config::MPD_port}"
-		  return false
+			warn "Can't connect to MPD: #{Config::MPD_host}:#{Config::MPD_port}"
+			return false
 		end
 	end
 
 	def initialize
-		super(Config::MPD_ip, Config::MPD_port)
+		super(Config::MPD_host, Config::MPD_port)
 		password(Config::Password) if Config::Password != nil
 
-		exit 1 unless validate_config and try_connect
+		exit 1 unless config_valid? and try_connect
 
 		@nextsong = status['playlistlength'].to_i
 	end
 
-	private :try_connect, :validate_config
+	private :config_valid?, :try_connect
 	attr_accessor :nextsong
 end
 
