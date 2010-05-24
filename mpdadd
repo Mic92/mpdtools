@@ -35,12 +35,6 @@ end
 
 class Mpdadd
 	def parse_arguments
-		switches = GetoptLong.new(
-			[ '--help', '-h', GetoptLong::NO_ARGUMENT ],
-			[ '--play', '-p', GetoptLong::NO_ARGUMENT ],
-			[ '--verbose', '-v', GetoptLong::NO_ARGUMENT ],
-			[ '--version', GetoptLong::NO_ARGUMENT ])
-
 		# Default options
 		options = {}
 		options[:help] = false
@@ -49,17 +43,27 @@ class Mpdadd
 		options[:version] = false
 		options[:files] = []
 
-		switches.each do |opt|
-			case opt
-			when '--help'
-				options[:help] = true
-			when '--play'
-				options[:play] = true
-			when '--verbose'
-				options[:verbose] = true
-			when '--version'
-				options[:version] = true
+		switches = GetoptLong.new(
+			[ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+			[ '--play', '-p', GetoptLong::NO_ARGUMENT ],
+			[ '--verbose', '-v', GetoptLong::NO_ARGUMENT ],
+			[ '--version', GetoptLong::NO_ARGUMENT ]
+		)
+		begin
+			switches.each do |opt|
+				case opt
+				when '--help'
+					options[:help] = true
+				when '--play'
+					options[:play] = true
+				when '--verbose'
+					options[:verbose] = true
+				when '--version'
+					options[:version] = true
+				end
 			end
+		rescue # exit on an invalid option without any trace messages
+			show_usage(1)
 		end
 
 		# The rest args are files/directorys hopefully.
@@ -67,14 +71,12 @@ class Mpdadd
 		return options
 	end
 
-	def validate_options(options)
+	def eval_options(options)
 		puts 'Validate options...' if options[:verbose]
 		if options[:help]
-			show_usage
-			exit 0
+			show_usage(0)
 		elsif options[:version]
-			show_version
-			exit 0
+			show_version(0)
 		elsif !options[:files].empty? # Filter all non-existent files.
 			validate_files = []
 
@@ -88,8 +90,7 @@ class Mpdadd
 
 			options[:files] = validate_files
 		else # The user does not give any arguments
-			show_usage
-			exit 0
+			show_usage(0)
 		end
 		return options
 	end
@@ -105,7 +106,7 @@ class Mpdadd
 				puts 'File is already in music directory!' if options[:verbose]
 				relativ_path = path[MPC::Full_music_path.length+1, path.length]
 			else  # else link and force MPD update
-				unique = generate_unique path # replace directory delimiter with !
+				unique = uniquify_path path # replace directory delimiter with !
 				link_path = File.join(MPC::Full_links_path, unique)
 
 				if !File.exist?(link_path) or (File.readlink link_path) == file
@@ -133,7 +134,7 @@ class Mpdadd
 		return options
 	end
 
-	def generate_unique(path)
+	def uniquify_path(path)
 		# EXPERIMENTAL Help me to test this on windows
 		if RUBY_PLATFORM =~ /(win|w)32$/
 			return path.gsub('\\', '!')
@@ -142,7 +143,7 @@ class Mpdadd
 		end
 	end
 
-	def show_usage
+	def show_usage(exit_code)
 		puts <<-EOF
 #{Info::Description}
 #{Info::Name} [Options] [files or directories]
@@ -151,7 +152,8 @@ class Mpdadd
   --verbose   -v  verbose logging
   --recursive -r  include subdirs
   --version       show version number
-		EOF
+EOF
+		exit(exit_code)
 	end
 
 	def show_version
@@ -160,10 +162,11 @@ Version: #{Info::Version}
 Author: #{Info::Author}
 Source: #{Info::Homepage}
 EOF
+		exit(exit_code)
 	end
 
 	def initialize
-		options = validate_options(parse_arguments)
+		options = eval_options(parse_arguments)
 
 		puts 'Try to connect to MPD' if options[:verbose]
 		mpc = MPC.new
@@ -179,14 +182,14 @@ EOF
 		exit 0
 	end
 
-	private :parse_arguments, :validate_options, :add_files, :generate_unique,  :show_usage, :show_version
+	private :parse_arguments, :eval_options, :add_files, :uniquify_path,  :show_usage, :show_version
 end
 
 class MPC < MPD
 	Full_music_path = File.expand_path(Config::Music_dir)
 	Full_links_path = File.join(Full_music_path, Config::Links_dirname)
 
-	def config_valid?
+	def mpd_path_valid?
 		if !File.exist? Full_music_path
 			warn "Given music directory '#{Config::Music_dir}' does not exist"
 			return false
@@ -221,12 +224,12 @@ class MPC < MPD
 		super(Config::MPD_host, Config::MPD_port)
 		password(Config::Password) if Config::Password != nil
 
-		exit 1 unless config_valid? and try_connect
+		exit 1 unless mpd_path_valid? and try_connect
 
 		@nextsong = status['playlistlength'].to_i
 	end
 
-	private :config_valid?, :try_connect
+	private :mpd_path_valid?, :try_connect
 	attr_accessor :nextsong
 end
 
