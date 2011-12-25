@@ -7,8 +7,13 @@ require "optparse"
 require "json"
 
 # comment this line out if you use the gem version of 'librmpd'
-#require 'rubygems'
-require "librmpd" # avaible in gems and in AUR in Archlinux
+first_try = true
+begin
+        require "librmpd" # avaible in gems and in AUR in Archlinux
+        rescue LoadError
+                $stderr.puts "Please install librmpd to use this tool!"
+                exit 1
+end
 
 class OpenStruct
         def to_json(*a)
