@@ -93,6 +93,7 @@ class Mpdadd < MPD
                 # Should be writeable by the user, who start this script.
                 options.link_dir = "links"
                 options.play     = false
+                options.use_gui  = false
 
                 options.verbose  = false
                 options.load(CONFIG)
@@ -102,6 +103,9 @@ class Mpdadd < MPD
                         opts.separator "Add all songs on your harddrive to your local MPD"
                         opts.separator ""
                         opts.separator "Specific options:"
+                        opts.on("-g", "--gui", "Use a gui file dialog (requires ruby-gtk)") do |l|
+                                options.use_gui = true
+                        end
                         opts.on("-l", "--library [DIRECTORY]", "Play the first file added immediately") do |l|
                                 options.library = l
                         end
@@ -122,7 +126,7 @@ class Mpdadd < MPD
 
                 parser.parse!(args)
 
-                if save_config then
+                if save_config
                         puts "Save config" if options.verbose
                         options.save(CONFIG)
                 end
@@ -133,6 +137,20 @@ class Mpdadd < MPD
                         else
                                 files << file
                         end
+                end
+                if options.use_gui
+                        require 'gtk2'
+                        dialog = Gtk::FileChooserDialog.new("Choose File to add it to mpd playlist.",
+                                                            nil,
+                                                            Gtk::FileChooser::ACTION_OPEN,
+                                                            nil,
+                                                            [Gtk::Stock::CANCEL, Gtk::Dialog::RESPONSE_CANCEL],
+                                                            [Gtk::Stock::OPEN, Gtk::Dialog::RESPONSE_ACCEPT])
+                        dialog.set_select_multiple(true)
+                        if dialog.run == Gtk::Dialog::RESPONSE_ACCEPT
+                                files = files.concat(dialog.filenames)
+                        end
+                        dialog.destroy
                 end
                 return options, files
 	end
