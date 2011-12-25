@@ -1,0 +1,142 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+
+# IMPORTS
+import sys
+
+from mpd import (MPDClient, CommandError)
+from socket import error as SocketError
+from argparse import ArgumentParser
+from os.path import basename
+
+HOST = 'localhost'
+PORT = '6600'
+PASSWORD = False
+CON_ID = {'host':HOST, 'port':PORT}
+
+# Some functions
+class App():
+    def doConnect(self, con_id):
+        """ Simple wrapper to connect MPD."""
+        try:
+            self._client.connect(**con_id)
+        except SocketError:
+            return False
+        return True
+
+    def doAuth(self, secret):
+        """ Authenticate """
+        try:
+           self._client.password(secret)
+        except CommandError:
+            return False
+        return True
+    def set_bookmark(self, uri, time):
+        self._client.sticker_set('song', uri, 'bookmark', time)
+    def get_bookmark(self, uri):
+        return self._client.sticker_get('song', uri, 'bookmark').split(':')[1]
+    def del_bookmark(self, uri):
+        return self._client.sticker_delete('song', uri)
+    def get_bookmarks(self):
+        query = self._client.sticker_find('song','/','bookmark')
+        return map(lambda row: (row['file'], row['sticker'].split('=')[1]), query)
+    def formatTime(self, seconds):
+        hours = seconds / 3600
+        seconds -= 3600*hours
+        minutes = seconds / 60
+        seconds -= 60*minutes
+        if hours == 0:
+            return "%02d:%02d" % (minutes, seconds)
+        return "%02d:%02d:%02d" % (hours, minutes, seconds)
+    def list_bookmarks(self, args):
+        i = 1
+        for bookmark in self.get_bookmarks():
+            song = bookmark[0]
+            elapsed = self.formatTime(int(bookmark[1]))
+            info = self._client.listallinfo(song)[0]
+            time = int(info['time'])
+            total = self.formatTime(time)
+            # some files have no title, use the basename instead
+            if "title" in info:
+                title = info['title']
+            else:
+                title = basename(song)
+            print("({0}) {2}/{3} {1}".format(i, title, elapsed, total))
+            i = i + 1
+    def delete_bookmark(self, args):
+        bookmarks = self.get_bookmarks()
+        if len(bookmarks) < args.index or args.index <= 0:
+                print("Invalid bookmark index")
+                sys.exit(2)
+        (uri, _) = bookmarks[args.index - 1]
+        self.del_bookmark(uri)
+    def bookmark_current(self, args):
+        state = self._client.status()
+        song  = self._client.currentsong()
+        (time,_) = state["time"].split(":")
+        self._client.sticker_set("song", song["file"], "bookmark", time)
+    def load_bookmark(self, args):
+        bookmarks = self.get_bookmarks()
+        if len(bookmarks) < args.index or args.index <= 0:
+            print("Invalid bookmark index")
+            sys.exit(2)
+        (uri, time) = bookmarks[args.index - 1]
+        playlist = self._client.playlistid()
+        songid = 0
+        # if song is already in playlist, we don't have to add it
+        for song in playlist:
+            if "file" in song and song["file"] == uri:
+                songid = song["id"]
+                break
+        if songid == 0:
+                songid = self._client.addid(uri)
+        self._client.seekid(songid, time)
+    def parse_args(self):
+        parser = ArgumentParser(description='Bookmark song position in mpd')
+        sub_parser = parser.add_subparsers()
+
+        list_parser = sub_parser.add_parser('list', help='list all bookmarks')
+        list_parser.set_defaults(func=self.list_bookmarks)
+
+        del_parser = sub_parser.add_parser('del', help='delete a bookmark')
+        del_parser.set_defaults(func=self.delete_bookmark)
+        del_parser.add_argument('index', type=int, nargs='?', default=1, help='')
+
+        set_parser = sub_parser.add_parser('save', help='save postion of current song')
+        set_parser.set_defaults(func=self.bookmark_current)
+
+        load_parser = sub_parser.add_parser('load', help='load the last bookmark')
+        load_parser.set_defaults(func=self.load_bookmark)
+        load_parser.add_argument('index', type=int, nargs='?', default=1, help='')
+
+        # Display help, if no arguments are given
+        if len(sys.argv) < 2:
+                parser.print_help()
+                sys.exit(0)
+        else:
+                return parser.parse_args()
+    def __init__(self):
+        args = self.parse_args()
+        self._client = MPDClient()
+        if not self.doConnect(CON_ID):
+            print('fail to connect MPD server.')
+            sys.exit(1)
+        if PASSWORD:
+            if not self.doAuth(PASSWORD):
+                print('Error trying to pass auth')
+                self._client.disconnect()
+                sys.exit(2)
+        if 'sticker' not in self._client.commands():
+            print("MPD seems not to support sticker or it isn't enabled.\n"
+                  "This feature was introduced in mpd 0.15.\n"
+                  "Your version is {0}.".format(self._client.mpd_version))
+            sys.exit(2)
+
+        args.func(args)
+
+        self._client.disconnect()
+        sys.exit(0)
+
+# Script starts here
+if __name__ == "__main__":
+    App()
