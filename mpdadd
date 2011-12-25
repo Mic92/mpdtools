@@ -1,211 +1,60 @@
 #!/usr/bin/env ruby
 
 # Standart ruby library, no extra packages required
-require 'fileutils'
-require 'getoptlong'
+require "fileutils"
+require "ostruct"
+require "optparse"
+require "json"
 
 # comment this line out if you use the gem version of 'librmpd'
 #require 'rubygems'
-require 'librmpd' # avaible in gems and in AUR in Archlinux
+require "librmpd" # avaible in gems and in AUR in Archlinux
 
-################# Change this to your settings ####################
-class Config    # In the futur a configuration should be processed.
-	# The top directory specified in /etc/mpd.conf
-	Music_dir = '~/music'
-	# The basename of the directory where the symbolic are stored.
-	# Should be writeable by the user, who start this script.
-	Links_dirname = 'link'
-	# Domain name or IP adress of the server. If you add a remote server,
-	# the linked files must be readable by the server.
-	MPD_host = '127.0.0.1'
-	# Port where MPD is listen to. Default: 6600
-	MPD_port = 6600
-	# Optional, This field will be ignored, if set to nil
-	Password = nil # is passed as plaintext
-end
-#################################################################
+class OpenStruct
+        def to_json(*a)
+                marshal_dump.to_json(*a)
+        end
+        def load(file)
+                if File.exists? file then
+                        begin
+                                f = File.open(file, 'r')
+                                marshal_load(JSON.load(f).map do |k, v|
+                                        return k.to_sym, v
+                                end)
+                                f.close
+                        rescue
+                                puts "Can't read config file: #$!"
+                        end
+                end
+        end
 
-module Info
-	Name = File.basename $0
-	Description = 'Add all songs on your harddrive to your local MPD'
-	Author = 'Joerg T. aka Mic92'
-	Version = 0.1
-	Homepage = 'http://github.com/Mic92/mpdadd'
-end
-
-class Mpdadd
-	def parse_arguments
-		# Default options
-		options = {}
-		options[:help] = false
-		options[:play] = false
-		options[:verbose] = false
-		options[:version] = false
-		options[:files] = []
-
-		switches = GetoptLong.new(
-			[ '--help', '-h', GetoptLong::NO_ARGUMENT ],
-			[ '--play', '-p', GetoptLong::NO_ARGUMENT ],
-			[ '--verbose', '-v', GetoptLong::NO_ARGUMENT ],
-			[ '--version', GetoptLong::NO_ARGUMENT ]
-		)
-		begin
-			switches.each do |opt|
-				case opt
-				when '--help'
-					options[:help] = true
-				when '--play'
-					options[:play] = true
-				when '--verbose'
-					options[:verbose] = true
-				when '--version'
-					options[:version] = true
-				end
-			end
-		rescue # exit on an invalid option without any trace messages
-			show_usage(1)
-		end
-
-		# The rest args are files/directorys hopefully.
-		options[:files] = ARGV
-		return options
-	end
-
-	def eval_options(options)
-		puts 'Validate options...' if options[:verbose]
-		if options[:help]
-			show_usage(0)
-		elsif options[:version]
-			show_version(0)
-		elsif !options[:files].empty? # Filter all non-existent files.
-			validate_files = []
-
-			options[:files].each do |file|
-				if !File.exist? file
-					puts "File #{file} does not exist!"
-					next
-				end
-				validate_files << file
-			end
-
-			options[:files] = validate_files
-		else # The user does not give any arguments
-			show_usage(0)
-		end
-		return options
-	end
-
-	def add_files(options, mpc)
-		options[:files].each do |file|
-			path = File.expand_path file
-			relativ_path = ""
-
-			puts 'Enqueing: '+File.basename(file) if options[:verbose]
-			# if the given path is within music dir just add it
-			if path.index( MPC::Full_music_path ) == 0
-				puts 'File is already in music directory!' if options[:verbose]
-				relativ_path = path[MPC::Full_music_path.length+1, path.length]
-			else  # else link and force MPD update
-				unique = uniquify_path path # replace directory delimiter with !
-				link_path = File.join(MPC::Full_links_path, unique)
-
-				if !File.exist?(link_path) or (File.readlink link_path) == file
-					puts 'Force simbolic link!' if options[:verbose]
-					FileUtils.ln_sf path, link_path
-				elsif options[:verbose]
-					puts 'Link already exists!'
-				end
-
-				relativ_path = File.join(Config::Links_dirname, unique)
-			end
-
-			times = 1
-			begin
-				puts 'Update MPD\'s Database' if options[:verbose]
-				mpc.update relativ_path
-				puts "Add '#{relativ_path}' to Playlist" if options[:verbose]
-				mpc.add relativ_path
-			rescue
-				times++
-					max_retries = times < 3
-				retry unless max_retries
-			end
-		end
-		return options
-	end
-
-	def uniquify_path(path)
-		# EXPERIMENTAL Help me to test this on windows
-		if RUBY_PLATFORM =~ /(win|w)32$/
-			return path.gsub('\\', '!')
-		else
-			return path.gsub('/', '!')
-		end
-	end
-
-	def show_usage(exit_code)
-		puts <<-EOF
-#{Info::Description}
-#{Info::Name} [Options] [files or directories]
-  --play,     -p  play the first file added
-  --help,     -h  show this help
-  --verbose   -v  verbose logging
-  --recursive -r  include subdirs
-  --version       show version number
-EOF
-		exit(exit_code)
-	end
-
-	def show_version
-		puts <<-EOF
-Version: #{Info::Version}
-Author: #{Info::Author}
-Source: #{Info::Homepage}
-EOF
-		exit(exit_code)
-	end
-
-	def initialize
-		options = eval_options(parse_arguments)
-
-		puts 'Try to connect to MPD' if options[:verbose]
-		mpc = MPC.new
-
-		add_files(options, mpc)
-
-		if options[:play]
-			puts 'Playing...' if options[:verbose]
-			mpc.play mpc.nextsong
-		end
-
-		puts 'Finished successful!' if options[:verbose]
-		exit 0
-	end
-
-	private :parse_arguments, :eval_options, :add_files, :uniquify_path,  :show_usage, :show_version
+        def save(file)
+                f = File.new(file, 'w')
+                JSON.dump self, f
+                f.close
+        end
 end
 
-class MPC < MPD
-	Full_music_path = File.expand_path(Config::Music_dir)
-	Full_links_path = File.join(Full_music_path, Config::Links_dirname)
+class Mpdadd < MPD
+        CONFIG = File.expand_path "~/.mpdadd"
 
 	def mpd_path_valid?
-		if !File.exist? Full_music_path
-			warn "Given music directory '#{Config::Music_dir}' does not exist"
+		if !File.exist? @mpd_path
+			warn "Given music directory '#{@mpd_path}' does not exist"
 			return false
-		elsif !File.exist? Full_links_path
-			print "Given link directory '#{Config::Links_dirname}' doesn't exists, create it? y or n?";
+		elsif !File.exist? @mpd_link_path
+			print "Given link directory '#{@mpd_link_path}' doesn't exists, create it? y or n?";
 			yes = (STDIN.gets =~ /^y.*/i)
 			if yes then
 				begin
-					FileUtils.mkpath Full_links_path
+					FileUtils.mkpath @mpd_link_path
 				rescue
 					warn "Can't create #$!."
 					return false
 				end
 			end
-		elsif !File.writable? Full_links_path
-			warn "Can't create links: '#{Full_links_path}' is not writable"
+		elsif !File.writable? @mpd_link_path
+			warn "Can't create links: '#{@mpd_link_path}' is not writable"
 			return false
 		end
 		return true
@@ -213,24 +62,142 @@ class MPC < MPD
 
 	def try_connect
 		begin
+                        puts "Try to connect to MPD" if @opts.verbose
 			connect
 		rescue
-			warn "Can't connect to MPD: #{Config::MPD_host}:#{Config::MPD_port}"
+			warn "Can't connect to MPD: #{@opts.host}:#{@opts.port}"
 			return false
 		end
 	end
 
-	def initialize
-		super(Config::MPD_host, Config::MPD_port)
-		password(Config::Password) if Config::Password != nil
+	def parse_args(args)
+                files = []
+                save_config = false
+                # Default options
+                options = OpenStruct.new
+                # Domain name or IP adress of the server. If you add a remote server,
+                # the linked files must be readable by the server.
+                options.host     = "localhost"
+                # Port where MPD is listen to. Default: 6600
+                options.port     = 6600
+                # Optional, This field will be ignored, if set to nil
+                options.password = nil
+                # The top directory specified in /etc/mpd.conf
+                options.library  = "~/music"
+                # The basename of the directory where the symbolic are stored.
+                # Should be writeable by the user, who start this script.
+                options.link_dir = "links"
+                options.play     = false
 
-		exit 1 unless mpd_path_valid? and try_connect
+                options.verbose  = false
+                options.load(CONFIG)
 
-		@nextsong = status['playlistlength'].to_i
+                parser = OptionParser.new do |opts|
+                        opts.banner = "Usage: #{File.basename $0} [options] files..."
+                        opts.separator "Add all songs on your harddrive to your local MPD"
+                        opts.separator ""
+                        opts.separator "Specific options:"
+                        opts.on("-l", "--library [DIRECTORY]", "Play the first file added immediately") do |l|
+                                options.library = l
+                        end
+                        opts.on("-p", "--play", "Play the first file added immediately") do
+                                options.play = true
+                        end
+                        opts.on("-s", "--save", "Save current options to file '~/.mpdadd'") do
+                                save_config = true
+                        end
+                        opts.on("-h", "--help", "Show this help.") do
+                                puts opts
+                                exit
+                        end
+                        opts.on("-v", "--[no-]verbose", "Logging verbosely") do |v|
+                                options.verbose = v
+                        end
+                end
+
+                parser.parse!(args)
+
+                if save_config then
+                        puts "Save config" if options.verbose
+                        options.save(CONFIG)
+                end
+                args.each do |file|
+                        if !File.exist? file
+                                puts "File #{file} does not exist!"
+                                next
+                        else
+                                files << file
+                        end
+                end
+                return options, files
 	end
 
-	private :mpd_path_valid?, :try_connect
-	attr_accessor :nextsong
+	def add_files(files)
+		files.each do |file|
+			path = File.expand_path file
+			relativ_path = ""
+
+			puts "Enqueing: #{File.basename(file)}" if opts.verbose
+			# if the given path is within music dir just add it
+			if path.index(@mpd_path) == 0
+				puts "File is already in music directory!" if opts.verbose
+				relativ_path = path[@mpd_path.length+1, path.length]
+			else  # else link and force MPD update
+				escaped_path = escape_path path
+				link_path = File.join(@mpd_link_path, escaped_path)
+
+				if !File.exist?(link_path) or (File.readlink link_path) == file
+					puts 'Force simbolic link!' if opts.verbose
+					FileUtils.ln_sf path, link_path
+				elsif opts.verbose
+					puts 'Link already exists!'
+				end
+
+				relativ_path = File.join(@opts.link_dir, escaped_path)
+			end
+
+                        puts 'Update MPD\'s Database' if opts.verbose
+                        update relativ_path
+                        puts "Add '#{relativ_path}' to Playlist" if opts.verbose
+                        add relativ_path
+		end
+	end
+        # replace directory delimiter with !
+	def escape_path(path)
+		# EXPERIMENTAL Help me to test this on windows
+		if RUBY_PLATFORM =~ /(win|w)32$/
+			return path.gsub("\\", "!")
+		else
+			return path.gsub("/", "!")
+		end
+	end
+
+	def initialize
+                @opts, files = parse_args(ARGV)
+                if files.empty? then
+                        exit 0
+                end
+                @mpd_path = File.expand_path(@opts.library)
+                @mpd_link_path = File.join(@mpd_path, @opts.link_dir)
+
+		super(@opts.host, @opts.port)
+		exit 1 unless mpd_path_valid? and try_connect
+
+		password(@opts.password) if @opts.password != nil
+		nextsong = status["playlistlength"].to_i
+
+		add_files files
+
+		if @opts.play
+			puts "Playing..." if @opts.verbose
+			play nextsong
+		end
+
+		puts "Finished successful!" if @opts.verbose
+		exit 0
+	end
+
+        attr_accessor :opts, :mpd_path, :mpd_link_path
 end
 
 Mpdadd.new
