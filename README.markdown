@@ -7,6 +7,7 @@ depencies:
 
 - python-mpd
 
+```
 usage: mpdmark [-h] {list,del,save,load} ...
 
 Bookmark song position in mpd
@@ -20,6 +21,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+```
 
 mpdadd
 ======
@@ -30,6 +32,7 @@ depencies:
 
 - librmpd (avaible as gem)
 
+```
 usage: mpdadd [options] files...
 Add all songs on your harddrive to your local MPD
 
@@ -42,3 +45,4 @@ Specific options:
     -s, --save                       Save current options to file '~/.mpdadd'
     -h, --help                       Show this help.
     -v, --[no-]verbose               Logging verbosely [default: off]
+```
