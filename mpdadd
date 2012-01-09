@@ -64,7 +64,7 @@ class Mpdadd < MPD
 	end
 
 	def try_connect
-		begin
+                begin
                         puts "Try to connect to MPD" if @opts.verbose
 			connect
 		rescue
@@ -101,13 +101,19 @@ class Mpdadd < MPD
                         opts.separator "Add all songs on your harddrive to your local MPD"
                         opts.separator ""
                         opts.separator "Specific options:"
-                        opts.on("-g", "--gui", "Use a gui file dialog (requires ruby-gtk)") do |l|
+                        opts.on("-h", "--host", "the host to connect to [default: localhost]") do |h|
+                                options.host = h
+                        end
+                        opts.on("-p", "--port", "the port to connect to [default: 6600]") do |p|
+                                options.port = p
+                        end
+                        opts.on("-g", "--gui", "Use a gui file dialog (requires ruby-gtk) [default: off]") do |l|
                                 options.use_gui = true
                         end
-                        opts.on("-l", "--library [DIRECTORY]", "Play the first file added immediately") do |l|
+                        opts.on("-l", "--library [DIRECTORY]", "Play the first file added immediately [default: ~/music]") do |l|
                                 options.library = l
                         end
-                        opts.on("-p", "--play", "Play the first file added immediately") do
+                        opts.on("-p", "--play", "Play the first file added immediately [default: off]") do
                                 options.play = true
                         end
                         opts.on("-s", "--save", "Save current options to file '~/.mpdadd'") do
@@ -117,7 +123,7 @@ class Mpdadd < MPD
                                 puts opts
                                 exit
                         end
-                        opts.on("-v", "--[no-]verbose", "Logging verbosely") do |v|
+                        opts.on("-v", "--[no-]verbose", "Logging verbosely [default: off]") do |v|
                                 options.verbose = v
                         end
                 end
