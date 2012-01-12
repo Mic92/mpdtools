@@ -34,6 +34,8 @@ depencies:
 
 - librmpd (avaible as gem)
 
+- ruby-gtk (optional, to use the file dialog)
+
 ```
 usage: mpdadd [options] files...
 Add all songs on your harddrive to your local MPD
