@@ -7,6 +7,8 @@ depencies:
 
 - python-mpd
 
+- mpd v0.15 or greater (need sticker support)
+
 ```
 usage: mpdmark [-h] {list,del,save,load} ...
 
