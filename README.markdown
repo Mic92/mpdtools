@@ -38,7 +38,7 @@ depencies:
 
 ```
 usage: mpdadd [options] files...
-Add all songs on your harddrive to your local MPD
+Add songs from outside of your mpd library to your playlist
 
 Specific options:
         --host                       the host to connect to [default: localhost]

@@ -98,7 +98,7 @@ class Mpdadd < MPD
 
                 parser = OptionParser.new do |opts|
                         opts.banner = "Usage: #{File.basename $0} [options] files..."
-                        opts.separator "Add all songs on your harddrive to your local MPD"
+                        opts.separator "Add songs from outside of your mpd library to your playlist"
                         opts.separator ""
                         opts.separator "Specific options:"
                         opts.on("-h", "--host", "the host to connect to [default: localhost]") do |h|
