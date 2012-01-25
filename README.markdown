@@ -40,6 +40,8 @@ depencies:
 
 - ruby-gtk (optional, to use the file dialog)
 
+- needs direct access to mpd's music path to create links
+
 ```
 usage: mpdadd [options] files...
 Add songs from outside of your mpd library to your playlist
