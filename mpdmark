@@ -9,28 +9,13 @@ from socket import error as SocketError
 from argparse import ArgumentParser
 from os.path import basename
 
-HOST = 'localhost'
-PORT = '6600'
-PASSWORD = False
-CON_ID = {'host':HOST, 'port':PORT}
+def die(msg):
+        sys.stderr.write(msg)
+        sys.stderr.write('\n')
+        sys.exit(1)
 
 # Some functions
 class App():
-    def doConnect(self, con_id):
-        """ Simple wrapper to connect MPD."""
-        try:
-            self._client.connect(**con_id)
-        except SocketError:
-            return False
-        return True
-
-    def doAuth(self, secret):
-        """ Authenticate """
-        try:
-           self._client.password(secret)
-        except CommandError:
-            return False
-        return True
     def set_bookmark(self, uri, time):
         self._client.sticker_set('song', uri, 'bookmark', time)
     def get_bookmark(self, uri):
@@ -93,6 +78,9 @@ class App():
         self._client.seekid(songid, time)
     def parse_args(self):
         parser = ArgumentParser(description='Bookmark song position in mpd')
+        parser.add_argument('--host', help="Host address to connect to.", default="localhost", type=str)
+        parser.add_argument('--port', help="Port to connect to.", default=6600, type=int)
+        parser.add_argument('--password', help="Host address to connect to.", default=None, type=str)
         sub_parser = parser.add_subparsers()
 
         list_parser = sub_parser.add_parser('list', help='list all bookmarks')
@@ -118,14 +106,15 @@ class App():
     def __init__(self):
         args = self.parse_args()
         self._client = MPDClient()
-        if not self.doConnect(CON_ID):
-            print('fail to connect MPD server.')
-            sys.exit(1)
-        if PASSWORD:
-            if not self.doAuth(PASSWORD):
-                print('Error trying to pass auth')
-                self._client.disconnect()
-                sys.exit(2)
+        try:
+            self._client.connect(args.host, args.port)
+        except SocketError, e:
+            die('Fail to connect MPD server: %s' % e)
+        if args.password:
+            try:
+                self._client.password(args.password)
+            except CommandError, e:
+                die('Error trying to pass auth: %s' % e)
         if 'sticker' not in self._client.commands():
             print("MPD seems not to support sticker or it isn't enabled.\n"
                   "This feature was introduced in mpd 0.15.\n"
