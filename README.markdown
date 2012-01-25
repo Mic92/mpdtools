@@ -10,7 +10,8 @@ depencies:
 - mpd v0.15 or greater (need sticker support)
 
 ```
-usage: mpdmark [-h] {list,del,save,load} ...
+usage: mpdmark [-h] [--host HOST] [--port PORT] [--password PASSWORD]
+               {list,del,save,load} ...
 
 Bookmark song position in mpd
 
@@ -23,6 +24,9 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  --host HOST           Host address to connect to.
+  --port PORT           Port to connect to.
+  --password PASSWORD   Host address to connect to.
 ```
 
 mpdadd
