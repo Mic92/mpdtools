@@ -1,7 +1,7 @@
 mpdmark
 =======
 
-depencies:
+requirements:
 ----------
 - python
 
@@ -32,7 +32,7 @@ optional arguments:
 mpdadd
 ======
 
-depencies:
+requirements:
 ----------
 - ruby
 
