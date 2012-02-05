@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # IMPORTS
@@ -24,11 +24,11 @@ class App():
         return self._client.sticker_delete('song', uri)
     def get_bookmarks(self):
         query = self._client.sticker_find('song','/','bookmark')
-        return map(lambda row: (row['file'], row['sticker'].split('=')[1]), query)
+        return [(row['file'], row['sticker'].split('=')[1]) for row in query]
     def formatTime(self, seconds):
-        hours = seconds / 3600
+        hours = int(seconds / 3600)
         seconds -= 3600*hours
-        minutes = seconds / 60
+        minutes = int(seconds / 60)
         seconds -= 60*minutes
         if hours == 0:
             return "%02d:%02d" % (minutes, seconds)
@@ -46,7 +46,7 @@ class App():
                 title = info['title']
             else:
                 title = basename(song)
-            print("({0}) {2}/{3} {1}".format(i, title, elapsed, total))
+            print("({0}) {1}/{2} {3}".format(i, elapsed, total, title))
             i = i + 1
     def delete_bookmark(self, args):
         bookmarks = self.get_bookmarks()
@@ -108,12 +108,12 @@ class App():
         self._client = MPDClient()
         try:
             self._client.connect(args.host, args.port)
-        except SocketError, e:
+        except SocketError as e:
             die('Fail to connect MPD server: %s' % e)
         if args.password:
             try:
                 self._client.password(args.password)
-            except CommandError, e:
+            except CommandError as e:
                 die('Error trying to pass auth: %s' % e)
         if 'sticker' not in self._client.commands():
             print("MPD seems not to support sticker or it isn't enabled.\n"
